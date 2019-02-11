@@ -15,9 +15,12 @@
 #include <plat/irqchip/plic.h>
 #include <plat/sys/clint.h>
 #include "platform.h"
+#include "sysctl.h"
 #include "uarths.h"
 
 #define K210_UART_BAUDRATE		115200
+#define PLL0_OUTPUT_FREQ		800000000UL
+#define PLL1_OUTPUT_FREQ		400000000UL
 
 static int k210_console_init(void)
 {
@@ -98,6 +101,13 @@ static int k210_system_shutdown(u32 type)
 	return 0;
 }
 
+static int k210_early_init(bool cold_boot)
+{
+	sysctl_pll_set_freq(SYSCTL_PLL0, PLL0_OUTPUT_FREQ);
+	sysctl_pll_set_freq(SYSCTL_PLL1, PLL1_OUTPUT_FREQ);
+	return 0;
+}
+
 const struct sbi_platform platform = {
 
 	.name = "Kendryte K210",
@@ -106,6 +116,8 @@ const struct sbi_platform platform = {
 	.hart_count = K210_HART_COUNT,
 	.hart_stack_size = K210_HART_STACK_SIZE,
 	.disabled_hart_mask = 0,
+
+	.early_init = k210_early_init,
 
 	.console_init = k210_console_init,
 	.console_putc = k210_console_putc,
