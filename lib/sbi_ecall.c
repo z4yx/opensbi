@@ -15,6 +15,7 @@
 #include <sbi/sbi_system.h>
 #include <sbi/sbi_timer.h>
 #include <sbi/sbi_trap.h>
+#include <sbi/riscv_asm.h>
 
 #define SBI_ECALL_VERSION_MAJOR			0
 #define SBI_ECALL_VERSION_MINOR			1
@@ -72,6 +73,12 @@ int sbi_ecall_handler(u32 hartid, ulong mcause,
 		break;
 	case SBI_ECALL_SHUTDOWN:
 		sbi_system_shutdown(scratch, 0);
+		ret = 0;
+		break;
+	case 23:
+		csr_clear(CSR_MSTATUS, 0xf<<24); // MODE
+		csr_set(CSR_MSTATUS, ((regs->a0 & 0xf)<<24)); // MODE
+		sbi_printf("mstatus=0x%lx\n", csr_read(CSR_MSTATUS));
 		ret = 0;
 		break;
 	default:
