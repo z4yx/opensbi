@@ -21,6 +21,16 @@ do {							\
 
 uint64_t volatile __attribute__((aligned(CE_PAGE_SIZE)))  ceLv1PageTable[(CE_PAGE_SIZE / 8) * (1)];
 
+void printHex(unsigned long num)
+{
+	char c = num & 0xf;
+	c = c < 10 ? c + '0' : c - 10 + 'a';
+	num >>= 4;
+	if(num)
+		printHex(num);
+	sbi_ecall_console_putc(c);
+}
+
 void ceResetCacheState() {
 	asm volatile ("sfence.vm");
 }
@@ -31,7 +41,7 @@ uint64_t ceEncodePTE(uint32_t physAddr, uint32_t flags) {
 }
 
 void ceSetupMMU() {
-	const uint64_t stapModeSv39 = 9;
+	// const uint64_t stapModeSv39 = 9;
 
 	sbi_ecall_console_puts("setup mmu...\n");
 
@@ -52,33 +62,28 @@ void ceSetupMMU() {
 	//     ceLv2PageTables[i] = ceEncodePTE(((uint32_t)ceLv3PageTables) + i * CE_PAGE_SIZE,  PTE_V | PTE_G | PTE_U);
 	// }
 
+
 	csr_write(sptbr, (uint64_t)ceLv1PageTable >> 12);
 	sbi_ecall_console_puts("write sptbr\n");
 
-	uint64_t msValue = csr_read(mstatus);
-	msValue |= MSTATUS_MPRV | ((uint64_t)stapModeSv39 << 24);
-	csr_write(mstatus, msValue);
-	sbi_ecall_console_puts("write mstatus\n");
+	// uint64_t msValue = csr_read(mstatus);
+	// sbi_ecall_console_puts("read mstatus=0x");
+	// printHex(msValue);
+	// sbi_ecall_console_putc('\n');
+	// msValue |= MSTATUS_MPRV | ((uint64_t)stapModeSv39 << 24);
+	// csr_write(mstatus, msValue);
+	// sbi_ecall_console_puts("write mstatus\n");
+	SBI_ECALL_1(23, (9));
 
 	ceResetCacheState();
 	sbi_ecall_console_puts("fence\n");
-}
-
-void printHex(unsigned long num)
-{
-	char c = num & 0xf;
-	c = c < 10 ? c + '0' : c - 10 + 'a';
-	num >>= 4;
-	if(num)
-		printHex(num);
-	sbi_ecall_console_putc(c);
 }
 
 void test_main(unsigned long a0, unsigned long a1)
 {
 	sbi_ecall_console_puts("\nTest payload running\n");
 	volatile char *p = (void*)0x80100000;
-	for(; (unsigned long)p < 0x80400000; p += 0x100000)
+	for(; (unsigned long)p < 0x80800000; p += 0x100000)
 	{
 		sbi_ecall_console_puts("mem access 0x");
 		printHex((unsigned long)p);
@@ -88,14 +93,14 @@ void test_main(unsigned long a0, unsigned long a1)
 	
 	volatile long *ptr = (void*)0x80100000;
 	long rnd = 12345;
-	for(; (long)ptr < 0x80400000; ptr++)
+	for(; (long)ptr < 0x80800000; ptr+=4)
 	{
 		*ptr = rnd;
 		rnd = rnd * 1103515245 + 12345;
 	}
 	ptr = (void*)0x80100000;
 	rnd = 12345;
-	for(; (long)ptr < 0x80400000; ptr++)
+	for(; (long)ptr < 0x80800000; ptr+=4)
 	{
 		if(*ptr != rnd){
 			sbi_ecall_console_puts("mem test fail @ 0x");
@@ -109,12 +114,12 @@ void test_main(unsigned long a0, unsigned long a1)
 		}
 		rnd = rnd * 1103515245 + 12345;
 	}
-	sbi_ecall_console_puts("mem test ok");
+	sbi_ecall_console_puts("mem test ok\n");
 
 	ceSetupMMU();
 	ptr = (void*)(0x180100000U);
 	rnd = 12345;
-	for(; (long)ptr < 0x180400000U; ptr++)
+	for(; (long)ptr < 0x180800000U; ptr+=4)
 	{
 		if(*ptr != rnd){
 			sbi_ecall_console_puts("mapped mem test fail @ 0x");
