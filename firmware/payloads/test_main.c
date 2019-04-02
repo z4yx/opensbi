@@ -39,9 +39,10 @@ void ceSetupMMU() {
 	for (uint32_t i = 0; i < 4; i++) {
 		ceLv1PageTable[i] = ceEncodePTE((0x40000000U) * i,  PTE_V | PTE_R | PTE_W | PTE_X | PTE_G | PTE_U);
 	}
-
-	//0x100000000 (1GiB) -> 0
-	ceLv1PageTable[4] = ceEncodePTE(0, PTE_V | PTE_R | PTE_W | PTE_X | PTE_G | PTE_U);
+	//0x100000000 - 0x1FFFFFFFF -> mirror to phys
+	for (uint32_t i = 0; i < 4; i++) {
+		ceLv1PageTable[i+4] = ceEncodePTE((0x40000000U) * i,  PTE_V | PTE_R | PTE_W | PTE_X | PTE_G | PTE_U);
+	}
 
 	//0x100000000 (1GiB) -> lv2
 	// ceLv1PageTable[4] = ceEncodePTE((uint32_t)ceLv2PageTables, PTE_V | PTE_G | PTE_U  );
@@ -52,12 +53,15 @@ void ceSetupMMU() {
 	// }
 
 	csr_write(sptbr, (uint64_t)ceLv1PageTable >> 12);
+	sbi_ecall_console_puts("write sptbr\n");
 
 	uint64_t msValue = csr_read(mstatus);
 	msValue |= MSTATUS_MPRV | ((uint64_t)stapModeSv39 << 24);
 	csr_write(mstatus, msValue);
+	sbi_ecall_console_puts("write mstatus\n");
 
 	ceResetCacheState();
+	sbi_ecall_console_puts("fence\n");
 }
 
 void printHex(unsigned long num)
@@ -120,7 +124,7 @@ void test_main(unsigned long a0, unsigned long a1)
 		}
 		rnd = rnd * 1103515245 + 12345;
 	}
-	sbi_ecall_console_puts("mapped mem test ok");
+	sbi_ecall_console_puts("mapped mem test ok\n");
 
 	while (1)
 		wfi();
