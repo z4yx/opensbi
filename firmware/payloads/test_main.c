@@ -73,8 +73,8 @@ void printHex(unsigned long num)
 void test_main(unsigned long a0, unsigned long a1)
 {
 	sbi_ecall_console_puts("\nTest payload running\n");
-	volatile char *p = (void*)0x80000000;
-	for(; (unsigned long)p < 0x80800000; p += 0x100000)
+	volatile char *p = (void*)0x80100000;
+	for(; (unsigned long)p < 0x80400000; p += 0x100000)
 	{
 		sbi_ecall_console_puts("mem access 0x");
 		printHex((unsigned long)p);
@@ -82,14 +82,14 @@ void test_main(unsigned long a0, unsigned long a1)
 		*(p+1) = *p;
 	}
 	
-	volatile long *ptr = (void*)0x80200000;
+	volatile long *ptr = (void*)0x80100000;
 	long rnd = 12345;
 	for(; (long)ptr < 0x80400000; ptr++)
 	{
 		*ptr = rnd;
 		rnd = rnd * 1103515245 + 12345;
 	}
-	ptr = (void*)0x80200000;
+	ptr = (void*)0x80100000;
 	rnd = 12345;
 	for(; (long)ptr < 0x80400000; ptr++)
 	{
@@ -108,9 +108,9 @@ void test_main(unsigned long a0, unsigned long a1)
 	sbi_ecall_console_puts("mem test ok");
 
 	ceSetupMMU();
-	ptr = (void*)(0x180200000U);
+	ptr = (void*)(0x180100000U);
 	rnd = 12345;
-	for(; (long)ptr < 0x180800000U; ptr++)
+	for(; (long)ptr < 0x180400000U; ptr++)
 	{
 		if(*ptr != rnd){
 			sbi_ecall_console_puts("mapped mem test fail @ 0x");
