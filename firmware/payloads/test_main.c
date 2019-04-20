@@ -58,9 +58,9 @@ void ceSetupMMU() {
 	for (uint32_t i = 0; i < 4; i++) {
 		ceLv1PageTable[i] = ceEncodePTE((0x40000000U) * i,  PTE_V | PTE_R | PTE_W | PTE_X | PTE_G | PTE_U);
 	}
-	//0x100000000 - 0x1FFFFFFFF -> mirror to phys
+	//0x100000000 - 0x1FFFFFFFF -> vaddr-0x100000000+4096
 	for (uint32_t i = 0; i < 4; i++) {
-		ceLv1PageTable[i+4] = ceEncodePTE((0x40000000U) * i,  PTE_V | PTE_R | PTE_W | PTE_X | PTE_G | PTE_U);
+		ceLv1PageTable[i+4] = ceEncodePTE((0x40000000U) * i + 4096,  PTE_V | PTE_R | PTE_W | PTE_X | PTE_G | PTE_U);
 	}
 
 	//0x100000000 (1GiB) -> lv2
@@ -88,6 +88,11 @@ void ceSetupMMU() {
 	sbi_ecall_console_puts("fence\n");
 }
 
+void test_func()
+{
+	sbi_ecall_console_puts("test_func\n");
+}
+
 void test_main(unsigned long a0, unsigned long a1)
 {
 	sbi_ecall_console_puts("\nTest payload running\n");
@@ -105,18 +110,15 @@ void test_main(unsigned long a0, unsigned long a1)
 	sbi_ecall_console_putc('\n');
 
 	uint64_t mask = 0;
+	volatile uint64_t *ptr;
+	uint64_t rnd;
 	for(int i=0; i<2; i++){
-		volatile uint64_t *ptr = (volatile uint64_t*)0x80100000;
-		uint64_t rnd = 12345;
+		ptr = (volatile uint64_t*)0x80100000;
+		rnd = 12345;
+		mask = ~mask;
 		for(; (uint64_t)ptr < 0x80800000; ptr+=1)
 		{
 			*ptr = rnd^mask; // Write MEM
-			// if((uint64_t)ptr == 0x802a0d90){
-			// 	printHex(rnd^mask);
-			// 	sbi_ecall_console_putc('\n');
-			// 	printHex(*ptr);
-			// 	sbi_ecall_console_putc('\n');
-			// }
 			rnd = rnd * 1103515245 + 12345;
 		}
 		ptr = (void*)0x80100000;
@@ -131,34 +133,41 @@ void test_main(unsigned long a0, unsigned long a1)
 				sbi_ecall_console_puts(" != ");
 				printHex(rnd^mask);
 				sbi_ecall_console_putc('\n');
-				// while (1)
-				// 	wfi();
+				while (1)
+					wfi();
 			}
 			rnd = rnd * 1103515245 + 12345;
 		}
-		// sbi_ecall_console_puts("mem test ok\n");
-		mask = ~mask;
 	}
+	sbi_ecall_console_puts("mem test ok\n");
 
-	// ceSetupMMU();
-	// ptr = (void*)(0x180100000U);
-	// rnd = 12345;
-	// for(; (uint64_t)ptr < 0x180800000U; ptr+=1)
-	// {
-	// 	if(*ptr != rnd){
-	// 		sbi_ecall_console_puts("mapped mem test fail @ 0x");
-	// 		printHex((uint64_t)ptr);
-	// 		sbi_ecall_console_puts("\n ");
-	// 		printHex(*ptr);
-	// 		sbi_ecall_console_puts(" != ");
-	// 		printHex(rnd);
-	// 		sbi_ecall_console_putc('\n');
-	// 		// while (1)
-	// 		// 	wfi();
-	// 	}
-	// 	rnd = rnd * 1103515245 + 12345;
-	// }
-	// sbi_ecall_console_puts("mapped mem test ok\n");
+	ceSetupMMU();
+	ptr = (void*)(0x180100000U-4096);
+	rnd = 12345;
+	for(; (uint64_t)ptr < 0x180800000U-4096; ptr+=1)
+	{
+		if(*ptr != (rnd^mask)){
+			sbi_ecall_console_puts("mapped mem test fail @ 0x");
+			printHex((uint64_t)ptr);
+			sbi_ecall_console_puts("\n ");
+			printHex(*ptr);
+			sbi_ecall_console_puts(" != ");
+			printHex(rnd);
+			sbi_ecall_console_putc('\n');
+			while (1)
+				wfi();
+		}
+		rnd = rnd * 1103515245 + 12345;
+	}
+	sbi_ecall_console_puts("mapped mem test ok\n");
+
+	((void(*)(void))(0x100000000U-4096+(uintptr_t)test_func))();
+
+	ptr = (void*)0xAAAA00000001U;
+	*ptr = 0xdead;
+	sbi_ecall_console_puts("written\n");
+	printHex(*ptr);
+
 
 	while (1)
 		wfi();

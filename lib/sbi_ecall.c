@@ -77,7 +77,7 @@ int sbi_ecall_handler(u32 hartid, ulong mcause,
 		break;
 	case 23:
 		csr_clear(CSR_MSTATUS, 0xf<<24); // MODE
-		csr_set(CSR_MSTATUS, ((regs->a0 & 0xf)<<24)); // MODE
+		csr_set(CSR_MSTATUS, MSTATUS_MPRV|((regs->a0 & 0xf)<<24)); // MODE
 		sbi_printf("mstatus=0x%lx\n", csr_read(CSR_MSTATUS));
 		ret = 0;
 		break;
