@@ -22,8 +22,73 @@ _start:
 	 * Jump to warm-boot if this is not the first core booting,
 	 * that is, for mhartid != 0
 	 */
-	csrr	a6, mhartid
+	csrr	a6, CSR_MHARTID
 	blt	zero, a6, _wait_for_boot_hart
+
+	li	ra, 0
+	call	_reset_regs
+
+	/* Preload HART details
+	 * s7 -> HART Count
+	 * s8 -> HART Stack Size
+	 */
+	la	a4, platform
+#if __riscv_xlen == 64
+	lwu	s7, SBI_PLATFORM_HART_COUNT_OFFSET(a4)
+	lwu	s8, SBI_PLATFORM_HART_STACK_SIZE_OFFSET(a4)
+#else
+	lw	s7, SBI_PLATFORM_HART_COUNT_OFFSET(a4)
+	lw	s8, SBI_PLATFORM_HART_STACK_SIZE_OFFSET(a4)
+#endif
+
+	/* Setup scratch space for all the HARTs*/
+	la	tp, _fw_end
+	mul	a5, s7, s8
+	add	tp, tp, a5
+	/* Keep a copy of tp */
+	add	t3, tp, zero
+	/* Counter */
+	li	t2, 1
+	/* hartid 0 is mandated by ISA */
+	li	t1, 0
+_scratch_init:
+	add	tp, t3, zero
+	mul	a5, s8, t1
+	sub	tp, tp, a5
+	li	a5, SBI_SCRATCH_SIZE
+	sub	tp, tp, a5
+
+	/* Initialize scratch space */
+	la	a4, _fw_start
+	la	a5, _fw_end
+	mul	t0, s7, s8
+	add	a5, a5, t0
+	sub	a5, a5, a4
+	REG_S	a4, SBI_SCRATCH_FW_START_OFFSET(tp)
+	REG_S	a5, SBI_SCRATCH_FW_SIZE_OFFSET(tp)
+	/* Note: fw_next_arg1() uses a0, a1, and ra */
+	call	fw_next_arg1
+	REG_S	a0, SBI_SCRATCH_NEXT_ARG1_OFFSET(tp)
+	/* Note: fw_next_addr() uses a0, a1, and ra */
+	call	fw_next_addr
+	REG_S	a0, SBI_SCRATCH_NEXT_ADDR_OFFSET(tp)
+	li	a4, PRV_S
+	REG_S	a4, SBI_SCRATCH_NEXT_MODE_OFFSET(tp)
+	la	a4, _start_warm
+	REG_S	a4, SBI_SCRATCH_WARMBOOT_ADDR_OFFSET(tp)
+	la	a4, platform
+	REG_S	a4, SBI_SCRATCH_PLATFORM_ADDR_OFFSET(tp)
+	la	a4, _hartid_to_scratch
+	REG_S	a4, SBI_SCRATCH_HARTID_TO_SCRATCH_OFFSET(tp)
+	REG_S	zero, SBI_SCRATCH_TMP0_OFFSET(tp)
+#ifdef FW_OPTIONS
+	li	a4, FW_OPTIONS
+	REG_S	a4, SBI_SCRATCH_OPTIONS_OFFSET(tp)
+#else
+	REG_S	zero, SBI_SCRATCH_OPTIONS_OFFSET(tp)
+#endif
+	add	t1, t1, t2
+	blt	t1, s7, _scratch_init
 
 	/* Zero-out BSS */
 	la	a4, _bss_start
@@ -54,7 +119,7 @@ _prev_arg1_override_done:
 	 */
 	beqz	a1, _fdt_reloc_done
 	/* Mask values in a3 and a4 */
-	li	a3, ~0xf
+	li	a3, ~(__SIZEOF_POINTER__ - 1)
 	li	a4, 0xff
 	/* t1 = destination FDT start address */
 	add	s0, a0, zero
@@ -111,30 +176,25 @@ _fdt_reloc_done:
 	la	a4, _boot_hart_done
 	li	a5, 1
 	REG_S	a5, (a4)
-	j	_wait_for_boot_hart
-
-	.align	3
-_boot_hart_done:
-	RISCV_PTR	0
-	.align	3
 
 	/* Wait for boot hart */
 _wait_for_boot_hart:
 	la	a4, _boot_hart_done
 	REG_L	a5, (a4)
+	/* Reduce the bus traffic so that boot hart may proceed faster */
+	nop
+	nop
+	nop
 	beqz	a5, _wait_for_boot_hart
 
 _start_warm:
-	/* Disable and clear all interrupts */
-	csrw	mie, zero
-	csrw	mip, zero
+	li	ra, 0
+	call	_reset_regs
 
-	/* Preload per-HART details
-	 * s6 -> HART ID
-	 * s7 -> HART Count
-	 * s8 -> HART Stack Size
-	 */
-	csrr	s6, mhartid
+	/* Disable and clear all interrupts */
+	csrw	CSR_MIE, zero
+	csrw	CSR_MIP, zero
+
 	la	a4, platform
 #if __riscv_xlen == 64
 	lwu	s7, SBI_PLATFORM_HART_COUNT_OFFSET(a4)
@@ -145,10 +205,10 @@ _start_warm:
 #endif
 
 	/* HART ID should be within expected limit */
-	csrr	s6, mhartid
+	csrr	s6, CSR_MHARTID
 	bge	s6, s7, _start_hang
 
-	/* Setup scratch space */
+	/* find the scratch space for this hart */
 	la	tp, _fw_end
 	mul	a5, s7, s8
 	add	tp, tp, a5
@@ -156,45 +216,33 @@ _start_warm:
 	sub	tp, tp, a5
 	li	a5, SBI_SCRATCH_SIZE
 	sub	tp, tp, a5
-	csrw	mscratch, tp
 
-	/* Initialize scratch space */
-	la	a4, _fw_start
-	la	a5, _fw_end
-	mul	t0, s7, s8
-	add	a5, a5, t0
-	sub	a5, a5, a4
-	REG_S	a4, SBI_SCRATCH_FW_START_OFFSET(tp)
-	REG_S	a5, SBI_SCRATCH_FW_SIZE_OFFSET(tp)
-	/* Note: fw_next_arg1() uses a0, a1, and ra */
-	call	fw_next_arg1
-	REG_S	a0, SBI_SCRATCH_NEXT_ARG1_OFFSET(tp)
-	/* Note: fw_next_addr() uses a0, a1, and ra */
-	call	fw_next_addr
-	REG_S	a0, SBI_SCRATCH_NEXT_ADDR_OFFSET(tp)
-	li	a4, PRV_S
-	REG_S	a4, SBI_SCRATCH_NEXT_MODE_OFFSET(tp)
-	la	a4, _start_warm
-	REG_S	a4, SBI_SCRATCH_WARMBOOT_ADDR_OFFSET(tp)
-	la	a4, platform
-	REG_S	a4, SBI_SCRATCH_PLATFORM_ADDR_OFFSET(tp)
-	la	a4, _hartid_to_scratch
-	REG_S	a4, SBI_SCRATCH_HARTID_TO_SCRATCH_OFFSET(tp)
-	REG_S	zero, SBI_SCRATCH_IPI_TYPE_OFFSET(tp)
+	/* update the mscratch */
+	csrw	CSR_MSCRATCH, tp
 
 	/* Setup stack */
 	add	sp, tp, zero
 
 	/* Setup trap handler */
 	la	a4, _trap_handler
-	csrw	mtvec, a4
+	csrw	CSR_MTVEC, a4
+	/* Make sure that mtvec is updated */
+	1:
+	csrr	a5, CSR_MTVEC
+	bne	a4, a5, 1b
+
 
 	/* Initialize SBI runtime */
-	csrr	a0, mscratch
+	csrr	a0, CSR_MSCRATCH
 	call	sbi_init
 
 	/* We don't expect to reach here hence just hang */
 	j	_start_hang
+
+	.align 3
+	.section .data, "aw"
+_boot_hart_done:
+	RISCV_PTR	0
 
 	.align 3
 	.section .entry, "ax", %progbits
@@ -242,42 +290,64 @@ _start_hang:
 	.section .entry, "ax", %progbits
 	.globl _trap_handler
 _trap_handler:
-	/* Swap SP and MSCRATCH */
-	csrrw	sp, mscratch, sp
+	/* Swap TP and MSCRATCH */
+	csrrw	tp, CSR_MSCRATCH, tp
+
+	/* Save T0 in scratch space */
+	REG_S	t0, SBI_SCRATCH_TMP0_OFFSET(tp)
+
+	/* Check which mode we came from */
+	csrr	t0, CSR_MSTATUS
+	srl	t0, t0, MSTATUS_MPP_SHIFT
+	and	t0, t0, PRV_M
+	xori	t0, t0, PRV_M
+	beq	t0, zero, _trap_handler_m_mode
+
+	/* We came from S-mode or U-mode */
+_trap_handler_s_mode:
+	/* Set T0 to original SP */
+	add	t0, sp, zero
 
 	/* Setup exception stack */
+	add	sp, tp, -(SBI_TRAP_REGS_SIZE)
+
+	/* Jump to code common for all modes */
+	j	_trap_handler_all_mode
+
+	/* We came from M-mode */
+_trap_handler_m_mode:
+	/* Set T0 to original SP */
+	add	t0, sp, zero
+
+	/* Re-use current SP as exception stack */
 	add	sp, sp, -(SBI_TRAP_REGS_SIZE)
 
-	/* Save RA, T0, T1, and T2 */
-	REG_S	ra, SBI_TRAP_REGS_OFFSET(ra)(sp)
-	REG_S	t0, SBI_TRAP_REGS_OFFSET(t0)(sp)
-	REG_S	t1, SBI_TRAP_REGS_OFFSET(t1)(sp)
-	REG_S	t2, SBI_TRAP_REGS_OFFSET(t2)(sp)
-
-	/* Save original SP and restore MSCRATCH */
-	add	t0, sp, SBI_TRAP_REGS_SIZE
-	csrrw	t0, mscratch, t0
+_trap_handler_all_mode:
+	/* Save original SP (from T0) on stack */
 	REG_S	t0, SBI_TRAP_REGS_OFFSET(sp)(sp)
 
-	/* Save MEPC and MSTATUS CSRs */
-	csrr	t0, mepc
-	csrr	t1, mstatus
+	/* Restore T0 from scratch space */
+	REG_L	t0, SBI_SCRATCH_TMP0_OFFSET(tp)
 
-	/*
-	 * Note: Fast path trap handling can be done here
-	 * using SP, RA, T0, T1, and T2 registers where
-	 * T0 <- MEPC
-	 * T1 <- MSTATUS
-	 */
+	/* Save T0 on stack */
+	REG_S	t0, SBI_TRAP_REGS_OFFSET(t0)(sp)
+
+	/* Swap TP and MSCRATCH */
+	csrrw	tp, CSR_MSCRATCH, tp
 
 	/* Save MEPC and MSTATUS CSRs */
+	csrr	t0, CSR_MEPC
 	REG_S	t0, SBI_TRAP_REGS_OFFSET(mepc)(sp)
-	REG_S	t1, SBI_TRAP_REGS_OFFSET(mstatus)(sp)
+	csrr	t0, CSR_MSTATUS
+	REG_S	t0, SBI_TRAP_REGS_OFFSET(mstatus)(sp)
 
-	/* Save all general regisers except SP, RA, T0, T1, and T2 */
+	/* Save all general regisers except SP and T0 */
 	REG_S	zero, SBI_TRAP_REGS_OFFSET(zero)(sp)
+	REG_S	ra, SBI_TRAP_REGS_OFFSET(ra)(sp)
 	REG_S	gp, SBI_TRAP_REGS_OFFSET(gp)(sp)
 	REG_S	tp, SBI_TRAP_REGS_OFFSET(tp)(sp)
+	REG_S	t1, SBI_TRAP_REGS_OFFSET(t1)(sp)
+	REG_S	t2, SBI_TRAP_REGS_OFFSET(t2)(sp)
 	REG_S	s0, SBI_TRAP_REGS_OFFSET(s0)(sp)
 	REG_S	s1, SBI_TRAP_REGS_OFFSET(s1)(sp)
 	REG_S	a0, SBI_TRAP_REGS_OFFSET(a0)(sp)
@@ -305,12 +375,15 @@ _trap_handler:
 
 	/* Call C routine */
 	add	a0, sp, zero
-	csrr	a1, mscratch
+	csrr	a1, CSR_MSCRATCH
 	call	sbi_trap_handler
 
-	/* Restore all general regisers except SP, RA, T0, T1, T2, and T3 */
+	/* Restore all general regisers except SP and T0 */
+	REG_L	ra, SBI_TRAP_REGS_OFFSET(ra)(sp)
 	REG_L	gp, SBI_TRAP_REGS_OFFSET(gp)(sp)
 	REG_L	tp, SBI_TRAP_REGS_OFFSET(tp)(sp)
+	REG_L	t1, SBI_TRAP_REGS_OFFSET(t1)(sp)
+	REG_L	t2, SBI_TRAP_REGS_OFFSET(t2)(sp)
 	REG_L	s0, SBI_TRAP_REGS_OFFSET(s0)(sp)
 	REG_L	s1, SBI_TRAP_REGS_OFFSET(s1)(sp)
 	REG_L	a0, SBI_TRAP_REGS_OFFSET(a0)(sp)
@@ -336,28 +409,56 @@ _trap_handler:
 	REG_L	t5, SBI_TRAP_REGS_OFFSET(t5)(sp)
 	REG_L	t6, SBI_TRAP_REGS_OFFSET(t6)(sp)
 
-	/* Load T0 and T1 with MEPC and MSTATUS */
-	REG_L	t0, SBI_TRAP_REGS_OFFSET(mepc)(sp)
-	REG_L	t1, SBI_TRAP_REGS_OFFSET(mstatus)(sp)
-
-	/*
-	 * Note: Jump here after fast trap handling
-	 * using SP, RA, T0, T1, and T2
-	 * T0 <- MEPC
-	 * T1 <- MSTATUS
-	 */
-
 	/* Restore MEPC and MSTATUS CSRs */
-	csrw	mepc, t0
-	csrw	mstatus, t1
+	REG_L	t0, SBI_TRAP_REGS_OFFSET(mepc)(sp)
+	csrw	CSR_MEPC, t0
+	REG_L	t0, SBI_TRAP_REGS_OFFSET(mstatus)(sp)
+	csrw	CSR_MSTATUS, t0
 
-	/* Restore RA, T0, T1, and T2 */
-	REG_L	ra, SBI_TRAP_REGS_OFFSET(ra)(sp)
+	/* Restore T0 */
 	REG_L	t0, SBI_TRAP_REGS_OFFSET(t0)(sp)
-	REG_L	t1, SBI_TRAP_REGS_OFFSET(t1)(sp)
-	REG_L	t2, SBI_TRAP_REGS_OFFSET(t2)(sp)
 
 	/* Restore SP */
 	REG_L	sp, SBI_TRAP_REGS_OFFSET(sp)(sp)
 
 	mret
+
+	.align 3
+	.section .entry, "ax", %progbits
+	.globl _reset_regs
+_reset_regs:
+
+	/* flush the instruction cache */
+	fence.i
+	/* Reset all registers except ra, a0,a1 */
+	li sp, 0
+	li gp, 0
+	li tp, 0
+	li t0, 0
+	li t1, 0
+	li t2, 0
+	li s0, 0
+	li s1, 0
+	li a2, 0
+	li a3, 0
+	li a4, 0
+	li a5, 0
+	li a6, 0
+	li a7, 0
+	li s2, 0
+	li s3, 0
+	li s4, 0
+	li s5, 0
+	li s6, 0
+	li s7, 0
+	li s8, 0
+	li s9, 0
+	li s10, 0
+	li s11, 0
+	li t3, 0
+	li t4, 0
+	li t5, 0
+	li t6, 0
+	csrw CSR_MSCRATCH, 0
+
+	ret

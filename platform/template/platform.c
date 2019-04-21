@@ -27,7 +27,7 @@ static int platform_early_init(bool cold_boot)
 /*
  * Platform final initialization.
  */
-static int platform final_init(bool cold_boot);
+static int platform_final_init(bool cold_boot)
 {
 	return 0;
 }
@@ -73,7 +73,7 @@ static void platform_console_putc(char ch)
 /*
  * Read a character from the platform console input.
  */
-static char platform_console_getc(void)
+static int platform_console_getc(void)
 {
 	return uart8250_getc();
 }
@@ -207,7 +207,7 @@ static int platform_system_shutdown(u32 type)
 /*
  * Platform descriptor.
  */
-struct sbi_platform platform = {
+const struct sbi_platform platform = {
 
 	.name = "platform-name",
 	.features = SBI_PLATFORM_DEFAULT_FEATURES,
@@ -215,7 +215,7 @@ struct sbi_platform platform = {
 	.hart_stack_size = 4096,
 	.disabled_hart_mask = 0,
 
-	.early_init = platform_final_init,
+	.early_init = platform_early_init,
 	.final_init = platform_final_init,
 
 	.pmp_region_count = platform_pmp_region_count,
@@ -236,7 +236,7 @@ struct sbi_platform platform = {
 	.timer_event_start = platform_timer_event_start,
 	.timer_event_stop = platform_timer_event_stop,
 
-	.system_reboot = platform_system_down,
-	.system_shutdown = platform_system_down
+	.system_reboot = platform_system_reboot,
+	.system_shutdown = platform_system_shutdown
 };
 

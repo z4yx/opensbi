@@ -9,9 +9,13 @@
 
 # Compiler flags
 platform-cppflags-y =
-platform-cflags-y =-mabi=lp64 -march=rv64imafdc -mcmodel=medany
-platform-asflags-y =-mabi=lp64 -march=rv64imafdc -mcmodel=medany
+platform-cflags-y =
+platform-asflags-y =
 platform-ldflags-y =
+
+# Command for platform specific "make run"
+platform-runcmd = qemu-system-riscv$(PLATFORM_RISCV_XLEN) -M sifive_u -m 256M \
+  -nographic -kernel $(build_dir)/platform/qemu/sifive_u/firmware/fw_payload.elf
 
 # Common drivers to enable
 PLATFORM_IRQCHIP_PLIC=y
@@ -21,10 +25,22 @@ PLATFORM_SYS_CLINT=y
 # Blobs to build
 FW_TEXT_START=0x80000000
 FW_JUMP=y
-FW_JUMP_ADDR=0x80200000
+ifeq ($(PLATFORM_RISCV_XLEN), 32)
+  # This needs to be 4MB alligned for 32-bit system
+  FW_JUMP_ADDR=0x80400000
+else
+  # This needs to be 2MB alligned for 64-bit system
+  FW_JUMP_ADDR=0x80200000
+endif
 FW_JUMP_FDT_ADDR=0x82200000
 FW_PAYLOAD=y
-FW_PAYLOAD_OFFSET=0x200000
+ifeq ($(PLATFORM_RISCV_XLEN), 32)
+  # This needs to be 4MB alligned for 32-bit system
+  FW_PAYLOAD_OFFSET=0x400000
+else
+  # This needs to be 2MB alligned for 64-bit system
+  FW_PAYLOAD_OFFSET=0x200000
+endif
 FW_PAYLOAD_FDT_ADDR=0x82200000
 
 # External Libraries to include

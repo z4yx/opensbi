@@ -1,4 +1,8 @@
-/* Copyright 2018 Canaan Inc.
+/*
+ * SPDX-License-Identifier:    Apache-2.0
+ *
+ * Copyright 2018 Canaan Inc.
+ * Copyright (c) 2019 Western Digital Corporation or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +92,7 @@
 #define SPI1_BASE_ADDR		(0x53000000U)
 #define SPI3_BASE_ADDR		(0x54000000U)
 
-#define read_cycle()		csr_read(mcycle)
+#define read_cycle()		csr_read(CSR_MCYCLE)
 
 /*
  * PLIC External Interrupt Numbers

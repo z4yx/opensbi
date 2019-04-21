@@ -1,4 +1,8 @@
-/* Copyright 2018 Canaan Inc.
+/*
+ * SPDX-License-Identifier:    Apache-2.0
+ *
+ * Copyright 2018 Canaan Inc.
+ * Copyright (c) 2019 Western Digital Corporation or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,6 +165,6 @@ enum uarths_stopbit {
 
 void uarths_init(u32 baud_rate, enum uarths_stopbit stopbit);
 void uarths_putc(char c);
-char uarths_getc(void);
+int uarths_getc(void);
 
 #endif /* _K210_UARTHS_H_ */

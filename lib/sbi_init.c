@@ -28,11 +28,40 @@
 	"        | |\n" \
 	"        |_|\n\n"
 
+static void sbi_boot_prints(struct sbi_scratch *scratch, u32 hartid)
+{
+	char str[64];
+	const struct sbi_platform *plat = sbi_platform_ptr(scratch);
+
+	misa_string(str, sizeof(str));
+	sbi_printf("\nOpenSBI v%d.%d (%s %s)\n",
+		   OPENSBI_VERSION_MAJOR, OPENSBI_VERSION_MINOR,
+		   __DATE__, __TIME__);
+
+	sbi_printf(BANNER);
+
+	/* Platform details */
+	sbi_printf("Platform Name          : %s\n", sbi_platform_name(plat));
+	sbi_printf("Platform HART Features : RV%d%s\n", misa_xlen(), str);
+	sbi_printf("Platform Max HARTs     : %d\n",
+		   sbi_platform_hart_count(plat));
+	sbi_printf("Current Hart           : %u\n", hartid);
+	/* Firmware details */
+	sbi_printf("Firmware Base          : 0x%lx\n", scratch->fw_start);
+	sbi_printf("Firmware Size          : %d KB\n",
+		   (u32)(scratch->fw_size / 1024));
+	/* Generic details */
+	sbi_printf("Runtime SBI Version    : %d.%d\n",
+		   sbi_ecall_version_major(), sbi_ecall_version_minor());
+	sbi_printf("\n");
+
+	sbi_hart_pmp_dump(scratch);
+}
+
 static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 {
 	int rc;
-	char str[64];
-	struct sbi_platform *plat = sbi_platform_ptr(scratch);
+	const struct sbi_platform *plat = sbi_platform_ptr(scratch);
 
 	rc = sbi_system_early_init(scratch, TRUE);
 	if (rc)
@@ -62,29 +91,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	if (rc)
 		sbi_hart_hang();
 
-	misa_string(str, sizeof(str));
-	sbi_printf("\nOpenSBI v%d.%d (%s %s)\n",
-		   OPENSBI_VERSION_MAJOR, OPENSBI_VERSION_MINOR,
-		   __DATE__, __TIME__);
-
-	sbi_printf(BANNER);
-
-	/* Platform details */
-	sbi_printf("Platform Name          : %s\n", sbi_platform_name(plat));
-	sbi_printf("Platform HART Features : RV%d%s\n", misa_xlen(), str);
-	sbi_printf("Platform Max HARTs     : %d\n",
-		   sbi_platform_hart_count(plat));
-	sbi_printf("Current Hart           : %u\n", hartid);
-	/* Firmware details */
-	sbi_printf("Firmware Base          : 0x%lx\n", scratch->fw_start);
-	sbi_printf("Firmware Size          : %d KB\n",
-		   (u32)(scratch->fw_size / 1024));
-	/* Generic details */
-	sbi_printf("Runtime SBI Version    : %d.%d\n",
-		   sbi_ecall_version_major(), sbi_ecall_version_minor());
-	sbi_printf("\n");
-
-	sbi_hart_pmp_dump(scratch);
+	if (!(scratch->options & SBI_SCRATCH_NO_BOOT_PRINTS))
+		sbi_boot_prints(scratch, hartid);
 
 	if (!sbi_platform_has_hart_hotplug(plat))
 		sbi_hart_wake_coldboot_harts(scratch, hartid);
@@ -96,7 +104,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 static void __noreturn init_warmboot(struct sbi_scratch *scratch, u32 hartid)
 {
 	int rc;
-	struct sbi_platform *plat = sbi_platform_ptr(scratch);
+	const struct sbi_platform *plat = sbi_platform_ptr(scratch);
 
 	if (!sbi_platform_has_hart_hotplug(plat))
 		sbi_hart_wait_for_coldboot(scratch, hartid);
@@ -156,7 +164,7 @@ void __noreturn sbi_init(struct sbi_scratch *scratch)
 {
 	bool coldboot = FALSE;
 	u32 hartid = sbi_current_hartid();
-	struct sbi_platform *plat = sbi_platform_ptr(scratch);
+	const struct sbi_platform *plat = sbi_platform_ptr(scratch);
 
 	if (sbi_platform_hart_disabled(plat, hartid))
 		sbi_hart_hang();

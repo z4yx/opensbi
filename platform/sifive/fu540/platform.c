@@ -39,7 +39,7 @@
  * HARTs 1 to 4.
  */
 #ifndef FU540_ENABLED_HART_MASK
-#define FU540_ENABLED_HART_MASK (1 << 1 | 1 << 2 | 1 << 3 | 1 << 4)
+#define FU540_ENABLED_HART_MASK	(1 << 1 | 1 << 2 | 1 << 3 | 1 << 4)
 #endif
 
 #define FU540_HARITD_DISABLED			~(FU540_ENABLED_HART_MASK)
@@ -47,8 +47,8 @@
 /* PRCI clock related macros */
 //TODO: Do we need a separate driver for this ?
 #define FU540_PRCI_BASE_ADDR			0x10000000
-#define FU540_PRCI_CLKMUXSTATUSREG    		0x002C
-#define FU540_PRCI_CLKMUX_STATUS_TLCLKSEL      (0x1 << 1)
+#define FU540_PRCI_CLKMUXSTATUSREG		0x002C
+#define FU540_PRCI_CLKMUX_STATUS_TLCLKSEL	(0x1 << 1)
 
 static void fu540_modify_dt(void *fdt)
 {
@@ -80,6 +80,7 @@ static void fu540_modify_dt(void *fdt)
 
 	plic_fdt_fixup(fdt, "riscv,plic0");
 }
+
 static int fu540_final_init(bool cold_boot)
 {
 	void *fdt;
@@ -186,7 +187,7 @@ static int fu540_system_down(u32 type)
 	return 0;
 }
 
-struct sbi_platform platform = {
+const struct sbi_platform platform = {
 	.name = "SiFive Freedom U540",
 	.features = SBI_PLATFORM_DEFAULT_FEATURES,
 	.hart_count = FU540_HART_COUNT,

@@ -1,3 +1,5 @@
+Copyright (c) 2019 Western Digital Corporation or its affiliates.
+
 RISC-V Open Source Supervisor Binary Interface (OpenSBI)
 ========================================================
 
@@ -35,6 +37,16 @@ provides several runtime firmware examples built using the platform
 *libplatsbi.a*. These example firmwares can be used to replace the legacy
 *riskv-pk* bootloader (aka BBL) and enable the use of well known bootloaders
 such as [U-Boot].
+
+Required Toolchain
+------------------
+
+OpenSBI can be compiled natively or cross-compiled on a x86 host. For
+cross-compilation, you can build your tool chain or just download from
+the [bootlin] (https://toolchains.bootlin.com/).
+
+Please note that only 64bit version of toolchain is available in bootlin
+for now.
 
 Building and Installing OpenSBI Platform Independent Library
 ------------------------------------------------------------
@@ -125,7 +137,7 @@ A copy of this license with OpenSBI copyright can be found in the file
 [COPYING.BSD].
 
 All source files in OpenSBI contain the 2-Clause BSD license SPDX short
-indentifier in place of the full license text.
+identifier in place of the full license text.
 
 ```
 SPDX-License-Identifier:    BSD-2-Clause
@@ -142,6 +154,12 @@ files where the reused code is present.
    (GPL-2.0+ OR BSD-2-Clause). Some of this project code is used in OpenSBI
    under the terms of the BSD 2-Clause license. Any contributions to this
    code must be made under the terms of both licenses.
+2. Some source file for the Kendryte/k210 platform code are based on code from
+   the Kendryte [standalone SDK] available on github. These files retain the
+   original copyright and license of the Kendryte standalone SDK project and
+   are licensed under the terms of the Apache License, Version 2.0.
+
+See also the [third party notices] file for more information.
 
 Contributing to OpenSBI
 -----------------------
@@ -149,6 +167,9 @@ Contributing to OpenSBI
 The OpenSBI project encourages and welcomes contributions. Contributions should
 follow the rules described in OpenSBI [Contribution Guideline] document.
 In particular, all patches sent should contain a Signed-off-by tag.
+
+The [Contributors List] document provides a list of individuals and
+organizations actively contributing to the OpenSBI project.
 
 Documentation
 -------------
@@ -208,9 +229,11 @@ make I=<install_directory> install_docs
 [COPYING.BSD]: COPYING.BSD
 [SPDX]: http://spdx.org/licenses/
 [Contribution Guideline]: docs/contributing.md
+[Contributors List]: CONTRIBUTORS.md
 [Library Usage]: docs/library_usage.md
 [Platform Support Guide]: docs/platform_guide.md
 [Platform Documentation]: docs/platform/platform.md
 [Firmware Documentation]: docs/firmware/fw.md
 [Doxygen manual]: http://www.stack.nl/~dimitri/doxygen/manual.html
-
+[standalone SDK]: https://github.com/kendryte/kendryte-standalone-sdk
+[third party notices]: ThirdPartyNotices.md

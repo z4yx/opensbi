@@ -28,14 +28,25 @@
 #define SBI_SCRATCH_PLATFORM_ADDR_OFFSET	(6 * __SIZEOF_POINTER__)
 /** Offset of hartid_to_scratch member in sbi_scratch */
 #define SBI_SCRATCH_HARTID_TO_SCRATCH_OFFSET	(7 * __SIZEOF_POINTER__)
-/** Offset of ipi_type member in sbi_scratch */
-#define SBI_SCRATCH_IPI_TYPE_OFFSET		(8 * __SIZEOF_POINTER__)
-/** Maximum size of sbi_scratch */
-#define SBI_SCRATCH_SIZE			256
+/** Offset of tmp0 member in sbi_scratch */
+#define SBI_SCRATCH_TMP0_OFFSET			(8 * __SIZEOF_POINTER__)
+/** Offset of options member in sbi_scratch */
+#define SBI_SCRATCH_OPTIONS_OFFSET		(9 * __SIZEOF_POINTER__)
+
+/** sbi_ipi_data is located behind sbi_scratch. This struct is not packed. */
+/** Offset of ipi_type in sbi_ipi_data */
+#define SBI_IPI_DATA_IPI_TYPE_OFFSET		(15 * __SIZEOF_POINTER__)
+
+#define SBI_SCRATCH_TLB_QUEUE_HEAD_OFFSET	(16 * __SIZEOF_POINTER__)
+#define SBI_SCRATCH_TLB_QUEUE_MEM_OFFSET	(SBI_SCRATCH_TLB_QUEUE_HEAD_OFFSET + SBI_TLB_INFO_SIZE)
+
+/** Maximum size of sbi_scratch and sbi_ipi_data */
+#define SBI_SCRATCH_SIZE			(64 * __SIZEOF_POINTER__)
 
 #ifndef __ASSEMBLY__
 
 #include <sbi/sbi_types.h>
+#include <sbi/sbi_ipi.h>
 
 /** Representation of per-HART scratch space */
 struct sbi_scratch {
@@ -55,17 +66,37 @@ struct sbi_scratch {
 	unsigned long platform_addr;
 	/** Address of HART ID to sbi_scratch conversion function */
 	unsigned long hartid_to_scratch;
-	/** IPI type (or flags) */
-	unsigned long ipi_type;
+	/** Temporary storage */
+	unsigned long tmp0;
+	/** Options for OpenSBI library */
+	unsigned long options;
 } __packed;
+
+/** Possible options for OpenSBI library */
+enum sbi_scratch_options {
+	/** Disable prints during boot */
+	SBI_SCRATCH_NO_BOOT_PRINTS		= (1 << 0),
+};
 
 /** Get pointer to sbi_scratch for current HART */
 #define sbi_scratch_thishart_ptr()	\
-((struct sbi_scratch *)csr_read(mscratch))
+((struct sbi_scratch *)csr_read(CSR_MSCRATCH))
 
 /** Get Arg1 of next booting stage for current HART */
 #define sbi_scratch_thishart_arg1_ptr()	\
 ((void *)(sbi_scratch_thishart_ptr()->next_arg1))
+
+/** Get pointer to sbi_ipi_data from sbi_scratch */
+#define sbi_ipi_data_ptr(scratch)      \
+((struct sbi_ipi_data *)(void*)scratch + SBI_IPI_DATA_IPI_TYPE_OFFSET)
+
+/** Get pointer to tlb flush info fifo header from sbi_scratch */
+#define sbi_tlb_fifo_head_ptr(scratch)      \
+((struct sbi_fifo *)(void*)scratch + SBI_SCRATCH_TLB_QUEUE_HEAD_OFFSET)
+
+/** Get pointer to tlb flush info fifo queue address from sbi_scratch */
+#define sbi_tlb_fifo_mem_ptr(scratch)      \
+(void *)((void*)scratch + SBI_SCRATCH_TLB_QUEUE_MEM_OFFSET)
 
 #endif
 

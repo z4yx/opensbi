@@ -33,6 +33,17 @@ endif
 ifeq ($(install_dir),$(build_dir))
 $(error Install directory is same as build directory.)
 endif
+ifdef PLATFORM_DIR
+  platform_dir_path=$(shell readlink -f $(PLATFORM_DIR))
+  ifdef PLATFORM
+    platform_parent_dir=$(platform_dir_path)
+  else
+    PLATFORM=$(shell basename $(platform_dir_path))
+    platform_parent_dir=$(subst $(PLATFORM),,$(platform_dir_path))
+  endif
+else
+ platform_parent_dir=$(src_dir)/platform
+endif
 
 # Check if verbosity is ON for build process
 CMD_PREFIX_DEFAULT := @
@@ -43,61 +54,17 @@ else
 endif
 
 # Setup path of directories
-export platform_subdir=platform/$(PLATFORM)
-export platform_dir=$(CURDIR)/$(platform_subdir)
-export platform_common_dir=$(CURDIR)/platform/common
+export platform_subdir=$(PLATFORM)
+export platform_src_dir=$(platform_parent_dir)/$(platform_subdir)
+export platform_build_dir=$(build_dir)/platform/$(platform_subdir)
+export platform_common_src_dir=$(src_dir)/platform/common
 export include_dir=$(CURDIR)/include
 export lib_dir=$(CURDIR)/lib
 export firmware_dir=$(CURDIR)/firmware
 
 # Find library version
-OPENSBI_VERSION_MAJOR=`grep MAJOR $(include_dir)/sbi/sbi_version.h | awk '{ print $$3 }'`
-OPENSBI_VERSION_MINOR=`grep MINOR $(include_dir)/sbi/sbi_version.h | awk '{ print $$3 }'`
-
-# Setup list of objects.mk files
-ifdef PLATFORM
-platform-object-mks=$(shell if [ -d $(platform_dir) ]; then find $(platform_dir) -iname "objects.mk" | sort -r; fi)
-platform-common-object-mks=$(shell if [ -d $(platform_common_dir) ]; then find $(platform_common_dir) -iname "objects.mk" | sort -r; fi)
-endif
-lib-object-mks=$(shell if [ -d $(lib_dir) ]; then find $(lib_dir) -iname "objects.mk" | sort -r; fi)
-firmware-object-mks=$(shell if [ -d $(firmware_dir) ]; then find $(firmware_dir) -iname "objects.mk" | sort -r; fi)
-
-# Include platform specifig config.mk
-ifdef PLATFORM
-include $(platform_dir)/config.mk
-endif
-
-# Include all object.mk files
-ifdef PLATFORM
-include $(platform-object-mks)
-include $(platform-common-object-mks)
-endif
-include $(lib-object-mks)
-include $(firmware-object-mks)
-
-# Setup list of objects
-lib-objs-path-y=$(foreach obj,$(lib-objs-y),$(build_dir)/lib/$(obj))
-ifdef PLATFORM
-platform-objs-path-y=$(foreach obj,$(platform-objs-y),$(build_dir)/$(platform_subdir)/$(obj))
-platform-dtb-path-y=$(foreach obj,$(platform-dtb-y),$(build_dir)/$(platform_subdir)/$(obj))
-platform-common-objs-path-y=$(foreach obj,$(platform-common-objs-y),$(build_dir)/platform/common/$(obj))
-firmware-bins-path-y=$(foreach bin,$(firmware-bins-y),$(build_dir)/$(platform_subdir)/firmware/$(bin))
-endif
-firmware-elfs-path-y=$(firmware-bins-path-y:.bin=.elf)
-firmware-objs-path-y=$(firmware-bins-path-y:.bin=.o)
-
-# Setup list of deps files for objects
-deps-y=$(platform-objs-path-y:.o=.dep)
-deps-y+=$(platform-common-objs-path-y:.o=.dep)
-deps-y+=$(lib-objs-path-y:.o=.dep)
-deps-y+=$(firmware-objs-path-y:.o=.dep)
-
-GENFLAGS	=	-I$(platform_dir)/include
-GENFLAGS	+=	-I$(platform_common_dir)/include
-GENFLAGS	+=	-I$(include_dir)
-GENFLAGS	+=	$(platform-common-genflags-y)
-GENFLAGS	+=	$(platform-genflags-y)
-GENFLAGS	+=	$(firmware-genflags-y)
+OPENSBI_VERSION_MAJOR=`grep MAJOR $(include_dir)/sbi/sbi_version.h | sed 's/.*MAJOR.*\([0-9][0-9]*\)/\1/'`
+OPENSBI_VERSION_MINOR=`grep MINOR $(include_dir)/sbi/sbi_version.h | sed 's/.*MINOR.*\([0-9][0-9]*\)/\1/'`
 
 # Setup compilation commands
 ifdef CROSS_COMPILE
@@ -117,12 +84,83 @@ AS		=	$(CC)
 DTC		=	dtc
 
 # Guess the compillers xlen
-OPENSBI_CC_XLEN = `expr substr \`$(CC) -dumpmachine\`  6 2`
+OPENSBI_CC_XLEN := $(shell TMP=`$(CC) -dumpmachine | sed 's/riscv\([0-9][0-9]\).*/\1/'`; echo $${TMP})
+
+# Setup platform XLEN
+ifndef PLATFORM_RISCV_XLEN
+  ifeq ($(OPENSBI_CC_XLEN), 32)
+    PLATFORM_RISCV_XLEN = 32
+  else
+    PLATFORM_RISCV_XLEN = 64
+  endif
+endif
+
+# Setup list of objects.mk files
+ifdef PLATFORM
+platform-object-mks=$(shell if [ -d $(platform_src_dir)/ ]; then find $(platform_src_dir) -iname "objects.mk" | sort -r; fi)
+platform-common-object-mks=$(shell if [ -d $(platform_common_src_dir) ]; then find $(platform_common_src_dir) -iname "objects.mk" | sort -r; fi)
+endif
+lib-object-mks=$(shell if [ -d $(lib_dir) ]; then find $(lib_dir) -iname "objects.mk" | sort -r; fi)
+firmware-object-mks=$(shell if [ -d $(firmware_dir) ]; then find $(firmware_dir) -iname "objects.mk" | sort -r; fi)
+
+# Include platform specifig config.mk
+ifdef PLATFORM
+include $(platform_src_dir)/config.mk
+endif
+
+# Include all object.mk files
+ifdef PLATFORM
+include $(platform-object-mks)
+include $(platform-common-object-mks)
+endif
+include $(lib-object-mks)
+include $(firmware-object-mks)
+
+# Setup list of objects
+lib-objs-path-y=$(foreach obj,$(lib-objs-y),$(build_dir)/lib/$(obj))
+ifdef PLATFORM
+platform-objs-path-y=$(foreach obj,$(platform-objs-y),$(platform_build_dir)/$(obj))
+platform-dtb-path-y=$(foreach obj,$(platform-dtb-y),$(platform_build_dir)/$(obj))
+platform-common-objs-path-y=$(foreach obj,$(platform-common-objs-y),$(build_dir)/platform/common/$(obj))
+firmware-bins-path-y=$(foreach bin,$(firmware-bins-y),$(platform_build_dir)/firmware/$(bin))
+endif
+firmware-elfs-path-y=$(firmware-bins-path-y:.bin=.elf)
+firmware-objs-path-y=$(firmware-bins-path-y:.bin=.o)
+
+# Setup list of deps files for objects
+deps-y=$(platform-objs-path-y:.o=.dep)
+deps-y+=$(platform-common-objs-path-y:.o=.dep)
+deps-y+=$(lib-objs-path-y:.o=.dep)
+deps-y+=$(firmware-objs-path-y:.o=.dep)
+
+# Setup platform ABI, ISA and Code Model
+ifndef PLATFORM_RISCV_ABI
+  ifeq ($(PLATFORM_RISCV_XLEN), 32)
+    PLATFORM_RISCV_ABI = ilp$(PLATFORM_RISCV_XLEN)
+  else
+    PLATFORM_RISCV_ABI = lp$(PLATFORM_RISCV_XLEN)
+  endif
+endif
+ifndef PLATFORM_RISCV_ISA
+  PLATFORM_RISCV_ISA = rv$(PLATFORM_RISCV_XLEN)imafdc
+endif
+ifndef PLATFORM_RISCV_CODE_MODEL
+  PLATFORM_RISCV_CODE_MODEL = medany
+endif
 
 # Setup compilation commands flags
+GENFLAGS	=	-I$(platform_src_dir)/include
+GENFLAGS	+=	-I$(platform_common_src_dir)/include
+GENFLAGS	+=	-I$(include_dir)
+GENFLAGS	+=	$(platform-common-genflags-y)
+GENFLAGS	+=	$(platform-genflags-y)
+GENFLAGS	+=	$(firmware-genflags-y)
+
 CFLAGS		=	-g -Wall -Werror -nostdlib -fno-strict-aliasing -O2
 CFLAGS		+=	-fno-omit-frame-pointer -fno-optimize-sibling-calls
 CFLAGS		+=	-mno-save-restore -mstrict-align
+CFLAGS		+=	-mabi=$(PLATFORM_RISCV_ABI) -march=$(PLATFORM_RISCV_ISA)
+CFLAGS		+=	-mcmodel=$(PLATFORM_RISCV_CODE_MODEL)
 CFLAGS		+=	$(GENFLAGS)
 CFLAGS		+=	$(platform-cflags-y)
 CFLAGS		+=	$(firmware-cflags-y)
@@ -134,17 +172,21 @@ CPPFLAGS	+=	$(firmware-cppflags-y)
 ASFLAGS		=	-g -Wall -nostdlib -D__ASSEMBLY__
 ASFLAGS		+=	-fno-omit-frame-pointer -fno-optimize-sibling-calls
 ASFLAGS		+=	-mno-save-restore -mstrict-align
+ASFLAGS		+=	-mabi=$(PLATFORM_RISCV_ABI) -march=$(PLATFORM_RISCV_ISA)
+ASFLAGS		+=	-mcmodel=$(PLATFORM_RISCV_CODE_MODEL)
 ASFLAGS		+=	$(GENFLAGS)
 ASFLAGS		+=	$(platform-asflags-y)
 ASFLAGS		+=	$(firmware-asflags-y)
 
 ARFLAGS		=	rcs
 
-LDFLAGS		+=	-g -Wall -nostdlib -Wl,--build-id=none -N -static-libgcc -lgcc
-LDFLAGS		+=	$(platform-ldflags-y)
-LDFLAGS		+=	$(firmware-ldflags-y)
+ELFFLAGS	+=	-Wl,--build-id=none -N -static-libgcc -lgcc
+ELFFLAGS	+=	$(platform-ldflags-y)
+ELFFLAGS	+=	$(firmware-ldflags-y)
 
 MERGEFLAGS	+=	-r
+MERGEFLAGS	+=	-b elf$(PLATFORM_RISCV_XLEN)-littleriscv
+MERGEFLAGS	+=	-m elf$(PLATFORM_RISCV_XLEN)lriscv
 
 DTCFLAGS	=	-O dtb
 
@@ -183,7 +225,7 @@ compile_cpp = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     $(CPP) $(CPPFLAGS) -x c $(2) | grep -v "\#" > $(1)
 compile_cc_dep = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " CC-DEP    $(subst $(build_dir)/,,$(1))"; \
-	     echo `dirname $(1)`/ \\  > $(1) && \
+	     printf %s `dirname $(1)`/  > $(1) && \
 	     $(CC) $(CFLAGS) $(call dynamic_flags,$(1),$(2))   \
 	       -MM $(2) >> $(1) || rm -f $(1)
 compile_cc = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
@@ -191,15 +233,15 @@ compile_cc = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     $(CC) $(CFLAGS) $(call dynamic_flags,$(1),$(2)) -c $(2) -o $(1)
 compile_as_dep = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " AS-DEP    $(subst $(build_dir)/,,$(1))"; \
-	     echo `dirname $(1)`/ \\ > $(1) && \
+	     printf %s `dirname $(1)`/ > $(1) && \
 	     $(AS) $(ASFLAGS) $(call dynamic_flags,$(1),$(2)) \
 	       -MM $(2) >> $(1) || rm -f $(1)
 compile_as = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " AS        $(subst $(build_dir)/,,$(1))"; \
 	     $(AS) $(ASFLAGS) $(call dynamic_flags,$(1),$(2)) -c $(2) -o $(1)
-compile_ld = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
-	     echo " LD        $(subst $(build_dir)/,,$(1))"; \
-	     $(CC) $(3) $(LDFLAGS) -Wl,-T$(2) -o $(1)
+compile_elf = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
+	     echo " ELF       $(subst $(build_dir)/,,$(1))"; \
+	     $(CC) $(CFLAGS) $(3) $(ELFFLAGS) -Wl,-T$(2) -o $(1)
 compile_ar = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " AR        $(subst $(build_dir)/,,$(1))"; \
 	     $(AR) $(ARFLAGS) $(1) $(2)
@@ -212,7 +254,7 @@ compile_dts = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 
 targets-y  = $(build_dir)/lib/libsbi.a
 ifdef PLATFORM
-targets-y += $(build_dir)/$(platform_subdir)/lib/libplatsbi.a
+targets-y += $(platform_build_dir)/lib/libplatsbi.a
 targets-y += $(platform-dtb-path-y)
 endif
 targets-y += $(firmware-bins-path-y)
@@ -227,16 +269,16 @@ all: $(targets-y)
 $(build_dir)/%.bin: $(build_dir)/%.elf
 	$(call compile_objcopy,$@,$<)
 
-$(build_dir)/%.elf: $(build_dir)/%.o $(build_dir)/%.elf.ld $(build_dir)/$(platform_subdir)/lib/libplatsbi.a
-	$(call compile_ld,$@,$@.ld,$< $(build_dir)/$(platform_subdir)/lib/libplatsbi.a)
+$(build_dir)/%.elf: $(build_dir)/%.o $(build_dir)/%.elf.ld $(platform_build_dir)/lib/libplatsbi.a
+	$(call compile_elf,$@,$@.ld,$< $(platform_build_dir)/lib/libplatsbi.a)
 
-$(build_dir)/$(platform_subdir)/%.ld: $(src_dir)/%.ldS
+$(platform_build_dir)/%.ld: $(src_dir)/%.ldS
 	$(call compile_cpp,$@,$<)
 
 $(build_dir)/lib/libsbi.a: $(lib-objs-path-y)
 	$(call compile_ar,$@,$^)
 
-$(build_dir)/$(platform_subdir)/lib/libplatsbi.a: $(lib-objs-path-y) $(platform-common-objs-path-y) $(platform-objs-path-y)
+$(platform_build_dir)/lib/libplatsbi.a: $(lib-objs-path-y) $(platform-common-objs-path-y) $(platform-objs-path-y)
 	$(call compile_ar,$@,$^)
 
 $(build_dir)/%.dep: $(src_dir)/%.c
@@ -251,16 +293,28 @@ $(build_dir)/%.dep: $(src_dir)/%.S
 $(build_dir)/%.o: $(src_dir)/%.S
 	$(call compile_as,$@,$<)
 
-$(build_dir)/$(platform_subdir)/%.dep: $(src_dir)/%.c
+$(platform_build_dir)/%.dep: $(platform_src_dir)/%.c
 	$(call compile_cc_dep,$@,$<)
 
-$(build_dir)/$(platform_subdir)/%.o: $(src_dir)/%.c
+$(platform_build_dir)/%.o: $(platform_src_dir)/%.c
 	$(call compile_cc,$@,$<)
 
-$(build_dir)/$(platform_subdir)/%.dep: $(src_dir)/%.S
+$(platform_build_dir)/%.dep: $(platform_src_dir)/%.S
 	$(call compile_as_dep,$@,$<)
 
-$(build_dir)/$(platform_subdir)/%.o: $(src_dir)/%.S
+$(platform_build_dir)/%.o: $(platform_src_dir)/%.S
+	$(call compile_as,$@,$<)
+
+$(platform_build_dir)/%.dep: $(src_dir)/%.c
+	$(call compile_cc_dep,$@,$<)
+
+$(platform_build_dir)/%.o: $(src_dir)/%.c
+	$(call compile_cc,$@,$<)
+
+$(platform_build_dir)/%.dep: $(src_dir)/%.S
+	$(call compile_as_dep,$@,$<)
+
+$(platform_build_dir)/%.o: $(src_dir)/%.S
 	$(call compile_as,$@,$<)
 
 $(build_dir)/%.dtb: $(src_dir)/%.dts
@@ -288,6 +342,21 @@ all-deps-2 = $(if $(findstring clean,$(MAKECMDGOALS)),,$(all-deps-1))
 # Include external dependency of firmwares after default Makefile rules
 include $(src_dir)/firmware/external_deps.mk
 
+# Convenient "make run" command for emulated platforms
+.PHONY: run
+run: all
+ifneq ($(platform-runcmd),)
+	$(platform-runcmd) $(RUN_ARGS)
+else
+ifdef PLATFORM
+	@echo "Platform $(PLATFORM) doesn't specify a run command"
+	@false
+else
+	@echo Run command only available when targeting a platform
+	@false
+endif
+endif
+
 install_targets-y  = install_libsbi
 ifdef PLATFORM
 install_targets-y += install_libplatsbi
@@ -304,13 +373,13 @@ install_libsbi: $(build_dir)/lib/libsbi.a
 	$(call inst_file,$(install_dir)/lib/libsbi.a,$(build_dir)/lib/libsbi.a)
 
 .PHONY: install_libplatsbi
-install_libplatsbi: $(build_dir)/$(platform_subdir)/lib/libplatsbi.a $(build_dir)/lib/libsbi.a
-	$(call inst_file,$(install_dir)/$(platform_subdir)/lib/libplatsbi.a,$(build_dir)/$(platform_subdir)/lib/libplatsbi.a)
+install_libplatsbi: $(platform_build_dir)/lib/libplatsbi.a $(build_dir)/lib/libsbi.a
+	$(call inst_file,$(install_dir)/platform/$(platform_subdir)/lib/libplatsbi.a,$(platform_build_dir)/lib/libplatsbi.a)
 
 .PHONY: install_firmwares
-install_firmwares: $(build_dir)/$(platform_subdir)/lib/libplatsbi.a $(build_dir)/lib/libsbi.a $(firmware-bins-path-y)
-	$(call inst_file_list,$(install_dir),$(build_dir),$(platform_subdir)/firmware,$(firmware-elfs-path-y))
-	$(call inst_file_list,$(install_dir),$(build_dir),$(platform_subdir)/firmware,$(firmware-bins-path-y))
+install_firmwares: $(platform_build_dir)/lib/libplatsbi.a $(build_dir)/lib/libsbi.a $(firmware-bins-path-y)
+	$(call inst_file_list,$(install_dir),$(build_dir),platform/$(platform_subdir)/firmware,$(firmware-elfs-path-y))
+	$(call inst_file_list,$(install_dir),$(build_dir),platform/$(platform_subdir)/firmware,$(firmware-bins-path-y))
 
 .PHONY: install_docs
 install_docs: $(build_dir)/docs/latex/refman.pdf

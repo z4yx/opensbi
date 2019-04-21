@@ -27,7 +27,10 @@ static volatile void *plic_base;
 
 static void plic_set_priority(u32 source, u32 val)
 {
-	writel(val, plic_base);
+	volatile void *plic_priority = plic_base +
+				PLIC_PRIORITY_BASE +
+				4 * source;
+	writel(val, plic_priority);
 }
 
 static void plic_set_thresh(u32 cntxid, u32 val)
@@ -83,12 +86,13 @@ int plic_warm_irqchip_init(u32 target_hart,
 	if (plic_hart_count <= target_hart)
 		return -1;
 	
+	/* By default, disable all IRQs for M-mode of target HART */
 	if (m_cntx_id > -1) {
 		for (i = 0; i < ie_words; i++)
 			plic_set_ie(m_cntx_id, i, 0);
 	}
 
-	/* By default, enable all IRQs for S-mode of target HART */
+	/* By default, disable all IRQs for S-mode of target HART */
 	if (s_cntx_id > -1) {
 		for (i = 0; i < ie_words; i++)
 			plic_set_ie(s_cntx_id, i, 0);
@@ -115,7 +119,7 @@ int plic_cold_irqchip_init(unsigned long base,
 	plic_base = (void *)base;
 
 	/* Configure default priorities of all IRQs */
-	for (i = 0; i < plic_num_sources; i++)
+	for (i = 1; i <= plic_num_sources; i++)
 		plic_set_priority(i, 1);
 
 	return 0;

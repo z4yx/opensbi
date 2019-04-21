@@ -9,18 +9,13 @@
 
 # Compiler flags
 platform-cppflags-y =
-# If we know the compillers xlen use it below
-ifeq ($(OPENSBI_CC_XLEN), 32)
-	platform-cflags-y =-mabi=ilp$(OPENSBI_CC_XLEN) -march=rv$(OPENSBI_CC_XLEN)imafdc
-	platform-asflags-y =-mabi=ilp$(OPENSBI_CC_XLEN) -march=rv$(OPENSBI_CC_XLEN)imafdc
-endif
-ifeq ($(OPENSBI_CC_XLEN), 64)
-	platform-cflags-y =-mabi=lp$(OPENSBI_CC_XLEN) -march=rv$(OPENSBI_CC_XLEN)imafdc
-	platform-asflags-y =-mabi=lp$(OPENSBI_CC_XLEN) -march=rv$(OPENSBI_CC_XLEN)imafdc
-endif
-platform-cflags-y +=  -mcmodel=medany
-platform-asflags-y += -mcmodel=medany
+platform-cflags-y =
+platform-asflags-y =
 platform-ldflags-y =
+
+# Command for platform specific "make run"
+platform-runcmd = qemu-system-riscv$(PLATFORM_RISCV_XLEN) -M virt -m 256M \
+  -nographic -kernel $(build_dir)/platform/qemu/virt/firmware/fw_payload.elf
 
 # Common drivers to enable
 PLATFORM_IRQCHIP_PLIC=y
@@ -30,12 +25,22 @@ PLATFORM_SYS_CLINT=y
 # Blobs to build
 FW_TEXT_START=0x80000000
 FW_JUMP=y
-# This needs to be 4MB alligned for 32-bit support
-FW_JUMP_ADDR=0x80400000
+ifeq ($(PLATFORM_RISCV_XLEN), 32)
+  # This needs to be 4MB alligned for 32-bit system
+  FW_JUMP_ADDR=0x80400000
+else
+  # This needs to be 2MB alligned for 64-bit system
+  FW_JUMP_ADDR=0x80200000
+endif
 FW_JUMP_FDT_ADDR=0x82200000
 FW_PAYLOAD=y
-# This needs to be 4MB alligned for 32-bit support
-FW_PAYLOAD_OFFSET=0x400000
+ifeq ($(PLATFORM_RISCV_XLEN), 32)
+  # This needs to be 4MB alligned for 32-bit system
+  FW_PAYLOAD_OFFSET=0x400000
+else
+  # This needs to be 2MB alligned for 64-bit system
+  FW_PAYLOAD_OFFSET=0x200000
+endif
 FW_PAYLOAD_FDT_ADDR=0x82200000
 
 # External Libraries to include

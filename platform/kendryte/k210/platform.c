@@ -34,7 +34,7 @@ static void k210_console_putc(char c)
 	uarths_putc(c);
 }
 
-static char k210_console_getc(void)
+static int k210_console_getc(void)
 {
 	return uarths_getc();
 }
@@ -108,7 +108,7 @@ static int k210_early_init(bool cold_boot)
 	return 0;
 }
 
-struct sbi_platform platform = {
+const struct sbi_platform platform = {
 
 	.name = "Kendryte K210",
 	.features = SBI_PLATFORM_HAS_TIMER_VALUE,
