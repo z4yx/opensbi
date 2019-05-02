@@ -122,7 +122,8 @@ int sbi_illegal_insn_handler(u32 hartid, ulong mcause,
 			     struct sbi_trap_regs *regs,
 			     struct sbi_scratch *scratch)
 {
-	ulong insn = csr_read(mbadaddr);
+	ulong insn = * (ulong*) csr_read(mepc);
+	// ulong insn = csr_read(mbadaddr);
 
 	if (unlikely((insn & 3) != 3)) {
 		if (insn == 0)

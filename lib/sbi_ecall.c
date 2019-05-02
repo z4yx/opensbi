@@ -7,6 +7,8 @@
  *   Anup Patel <anup.patel@wdc.com>
  */
 
+#include <sbi/riscv_asm.h>
+#include <sbi/riscv_encoding.h>
 #include <sbi/sbi_console.h>
 #include <sbi/sbi_ecall.h>
 #include <sbi/sbi_ecall_interface.h>
@@ -87,6 +89,22 @@ int sbi_ecall_handler(u32 hartid, ulong mcause,
 		sbi_system_shutdown(scratch, 0);
 		ret = 0;
 		break;
+	case 20: // Redirect trap, used by uCore, syscall from S-Level
+		csr_write(CSR_STVAL, csr_read(CSR_MTVAL));
+		csr_write(CSR_SEPC, regs->mepc);
+		csr_write(CSR_SCAUSE, csr_read(CSR_MCAUSE));
+		regs->mepc = csr_read(CSR_STVEC) - 4; // because of the following `regs->mepc += 4;`
+		{
+			uintptr_t new_mstatus = regs->mstatus & ~(MSTATUS_SPP | MSTATUS_SPIE | MSTATUS_SIE);
+			uintptr_t mpp_s = MSTATUS_MPP & (MSTATUS_MPP >> 1);
+			new_mstatus |= (regs->mstatus * (MSTATUS_SPIE / MSTATUS_SIE)) & MSTATUS_SPIE;
+			new_mstatus |= (regs->mstatus / (mpp_s / MSTATUS_SPP)) & MSTATUS_SPP;
+			new_mstatus |= mpp_s;
+			regs->mstatus = new_mstatus;
+		}
+		ret = 0;
+		break;
+		
 	default:
 		regs->a0 = SBI_ENOTSUPP;
 		ret = 0;

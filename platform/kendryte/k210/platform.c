@@ -22,9 +22,39 @@
 #define PLL0_OUTPUT_FREQ		800000000UL
 #define PLL1_OUTPUT_FREQ		400000000UL
 
+static void k210_paging_init()
+{
+	static __attribute__((aligned(RISCV_PGSIZE))) uint64_t BOOT_PAGE_TABLE[1 << RISCV_PGLEVEL_BITS] = {0};
+
+  	BOOT_PAGE_TABLE[   0] = (0x000000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	BOOT_PAGE_TABLE[   1] = (0x040000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	BOOT_PAGE_TABLE[   2] = (0x080000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	BOOT_PAGE_TABLE[   3] = (0x0C0000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	BOOT_PAGE_TABLE[   4] = (0x000000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	BOOT_PAGE_TABLE[   5] = (0x040000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	BOOT_PAGE_TABLE[   6] = (0x080000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+  	// BOOT_PAGE_TABLE[0777] = (0x80000000ul >> 12 << 10) | PTE_V | PTE_R | PTE_W | PTE_X | PTE_G;
+	csr_write(CSR_SATP, (uint64_t)BOOT_PAGE_TABLE >> RISCV_PGSHIFT);
+
+	// enable Sv39
+	long mstatus = csr_read(CSR_MSTATUS);
+	mstatus |= 9 << 24;
+	csr_write(CSR_MSTATUS, mstatus);
+	asm volatile ("sfence.vm");
+}
+
+
 static int k210_console_init(void)
 {
 	uarths_init(K210_UART_BAUDRATE, UARTHS_STOP_1);
+
+	k210_paging_init();
+	csr_set(CSR_MEDELEG,
+		(1 << CAUSE_LOAD_ACCESS) |
+		(1 << CAUSE_FETCH_ACCESS) |
+		(1 << CAUSE_STORE_ACCESS)
+	);
+	csr_write(0x321, -1); //mscounteren in priv-1.9
 
 	return 0;
 }

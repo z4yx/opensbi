@@ -24,15 +24,15 @@ PLATFORM_SYS_CLINT=y
 
 # Blobs to build
 FW_TEXT_START=0x80000000
-FW_JUMP=y
-ifeq ($(PLATFORM_RISCV_XLEN), 32)
-  # This needs to be 4MB alligned for 32-bit system
-  FW_JUMP_ADDR=0x80400000
-else
-  # This needs to be 2MB alligned for 64-bit system
-  FW_JUMP_ADDR=0x80200000
-endif
-FW_JUMP_FDT_ADDR=0x82200000
+# FW_JUMP=y
+# ifeq ($(PLATFORM_RISCV_XLEN), 32)
+#   # This needs to be 4MB alligned for 32-bit system
+#   FW_JUMP_ADDR=0x80400000
+# else
+#   # This needs to be 2MB alligned for 64-bit system
+#   FW_JUMP_ADDR=0x80200000
+# endif
+# FW_JUMP_FDT_ADDR=0x82200000
 FW_PAYLOAD=y
 ifeq ($(PLATFORM_RISCV_XLEN), 32)
   # This needs to be 4MB alligned for 32-bit system
@@ -41,7 +41,7 @@ else
   # This needs to be 2MB alligned for 64-bit system
   FW_PAYLOAD_OFFSET=0x200000
 endif
-FW_PAYLOAD_FDT_ADDR=0x82200000
+# FW_PAYLOAD_FDT_ADDR=0x82200000
 
 # External Libraries to include
 PLATFORM_INCLUDE_LIBC=y
